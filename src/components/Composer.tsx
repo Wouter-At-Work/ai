@@ -5,7 +5,7 @@ interface ComposerProps {
   placeholder?: string;
   autoFocus?: boolean;
   onDraft?(body: string): void;
-  onPost(body: string): Promise<unknown> | void;
+  onPost?(body: string): Promise<unknown> | void;
   onCancel?(): void;
   postLabel?: string;
 }
@@ -32,7 +32,7 @@ export function Composer({
   }, [autoFocus]);
 
   async function post() {
-    if (empty) return;
+    if (empty || !onPost) return;
     setPosting(true);
     setError(null);
     try {
@@ -76,9 +76,11 @@ export function Composer({
             Cancel
           </button>
         )}
-        <button type="button" className="button" disabled={empty || posting} onClick={post}>
-          {posting ? "Posting…" : postLabel}
-        </button>
+        {onPost && (
+          <button type="button" className="button" disabled={empty || posting} onClick={post}>
+            {posting ? "Posting…" : postLabel}
+          </button>
+        )}
         {onDraft && (
           <button
             type="button"

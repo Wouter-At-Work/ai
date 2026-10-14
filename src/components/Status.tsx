@@ -13,6 +13,13 @@ export function ErrorBox({ title, error, hint }: { title: string; error: unknown
 }
 
 export function Avatar({ account, size = 20 }: { account: Account; size?: number }) {
+  if (!account.links.avatar.href) {
+    return (
+      <span className="avatar avatar-initial" style={{ width: size, height: size, fontSize: size * 0.5 }}>
+        {account.display_name.slice(0, 1)}
+      </span>
+    );
+  }
   return (
     <img
       className="avatar"

@@ -1,14 +1,17 @@
 #!/usr/bin/env bun
 /**
- * Opens the visual review UI on the right Bitbucket pull request.
+ * Opens a review in the browser and, by default, waits for it: the finished review is printed
+ * to stdout as Markdown for the agent that ran this, and the script exits.
  *
- *   bun scripts/visual-review.ts              PR for the current branch of the git repo in cwd
- *   bun scripts/visual-review.ts 412          PR #412 of the repo in cwd
- *   bun scripts/visual-review.ts <PR url>     any Bitbucket PR
- *   bun scripts/visual-review.ts --list       the pull request list
- *   bun scripts/visual-review.ts --stop       stop the background server
- *
- * Starts the review server in the background when it is not running yet.
+ *   visual-review.ts                PR for the current branch, or a local review of the branch
+ *                                   (working tree against the base) when it has no PR yet
+ *   visual-review.ts 412            PR #412 of the repo in cwd
+ *   visual-review.ts <PR url>       any Bitbucket PR
+ *   visual-review.ts --local        a local review even when the branch has a PR
+ *   visual-review.ts --base <ref>   the base for a local review (default: origin's default branch)
+ *   visual-review.ts --no-wait      open the review without waiting for it
+ *   visual-review.ts --list         the pull request list
+ *   visual-review.ts --stop         stop the background server
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -129,52 +132,123 @@ function openBrowser(url: string) {
   child.unref();
 }
 
-async function main() {
-  const arg = process.argv[2];
-  if (arg === "--stop") return stopServer();
+const secretFile = join(stateDir, "secret");
 
-  if (!env.BITBUCKET_EMAIL || !env.BITBUCKET_API_TOKEN) {
-    mkdirSync(configDir, { recursive: true });
-    if (!existsSync(envFile)) {
-      writeFileSync(envFile, readFileSync(join(appDir, ".env.example"), "utf8"), { mode: 0o600 });
-    }
-    fail(
-      `no Bitbucket credentials yet. Fill in BITBUCKET_EMAIL and BITBUCKET_API_TOKEN in ${envFile} (template written), then run again.`,
-    );
+function parseArgs(argv: string[]) {
+  const flags = { local: false, wait: true, list: false, stop: false, base: "", target: "" };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i] ?? "";
+    if (arg === "--local") flags.local = true;
+    else if (arg === "--no-wait") flags.wait = false;
+    else if (arg === "--list") flags.list = true;
+    else if (arg === "--stop") flags.stop = true;
+    else if (arg === "--base") flags.base = argv[++i] ?? "";
+    else if (arg.startsWith("--")) fail(`unknown option ${arg}`);
+    else flags.target = arg;
   }
+  return flags;
+}
 
+function requireCredentials() {
+  if (env.BITBUCKET_EMAIL && env.BITBUCKET_API_TOKEN) return;
+  mkdirSync(configDir, { recursive: true });
+  if (!existsSync(envFile)) {
+    writeFileSync(envFile, readFileSync(join(appDir, ".env.example"), "utf8"), { mode: 0o600 });
+  }
+  fail(
+    `no Bitbucket credentials yet. Fill in BITBUCKET_EMAIL and BITBUCKET_API_TOKEN in ${envFile} (template written), then run again. Local reviews (--local) work without them.`,
+  );
+}
+
+async function createSession(input: Record<string, unknown>) {
+  const response = await fetch(`${base}/__visual-review/sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Visual-Review-Secret": readFileSync(secretFile, "utf8").trim(),
+    },
+    body: JSON.stringify(input),
+  });
+  const body = (await response.json()) as { id?: string; error?: string };
+  if (!response.ok || !body.id) fail(body.error ?? `could not start a review session (${response.status})`);
+  return body.id;
+}
+
+async function waitForResult(id: string): Promise<string> {
+  for (;;) {
+    try {
+      const response = await fetch(`${base}/__visual-review/sessions/${id}/result`, {
+        headers: { "X-Visual-Review-Secret": readFileSync(secretFile, "utf8").trim() },
+      });
+      if (response.status === 200) return ((await response.json()) as { markdown: string }).markdown;
+      if (response.status === 404) fail("the review session disappeared");
+    } catch {
+      await ensureServer();
+    }
+    await Bun.sleep(1500);
+  }
+}
+
+async function main() {
+  const flags = parseArgs(process.argv.slice(2));
+  if (flags.stop) return stopServer();
+
+  let session: Record<string, unknown> | null = null;
   let path = "#/";
-  let summary = "pull request list";
+  let summary = "the pull request list";
 
-  const url = arg && /bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)/.exec(arg);
-  if (url?.[1] && url[2] && url[3]) {
-    path = `#/${url[1]}/${url[2]}/${url[3]}`;
+  const url = /bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)/.exec(flags.target);
+  const remote = repoFromRemote();
+
+  if (flags.list) {
+    requireCredentials();
+  } else if (url?.[1] && url[2] && url[3]) {
+    requireCredentials();
+    session = { kind: "pr", repo: `${url[1]}/${url[2]}`, prId: Number(url[3]) };
     summary = `${url[1]}/${url[2]} #${url[3]}`;
-  } else if (arg !== "--list") {
-    const remote = repoFromRemote();
-    if (!remote) {
-      if (arg) fail("not inside a Bitbucket git repository; pass a full PR URL instead");
-    } else if (arg && /^\d+$/.test(arg)) {
-      path = `#/${remote.workspace}/${remote.repo}/${arg}`;
-      summary = `${remote.workspace}/${remote.repo} #${arg}`;
-    } else if (arg) {
-      fail(`unrecognised argument "${arg}"`);
+  } else if (/^\d+$/.test(flags.target)) {
+    if (!remote) fail("not inside a Bitbucket git repository; pass a full PR URL instead");
+    requireCredentials();
+    session = { kind: "pr", repo: `${remote.workspace}/${remote.repo}`, prId: Number(flags.target) };
+    summary = `${remote.workspace}/${remote.repo} #${flags.target}`;
+  } else if (flags.target) {
+    fail(`unrecognised argument "${flags.target}"`);
+  } else {
+    if (!git("rev-parse", "--show-toplevel")) fail("not inside a git repository");
+    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+    const pr =
+      !flags.local && remote && branch && env.BITBUCKET_EMAIL && env.BITBUCKET_API_TOKEN
+        ? await findPrForBranch(remote.workspace, remote.repo, branch)
+        : null;
+    if (pr && remote) {
+      session = { kind: "pr", repo: `${remote.workspace}/${remote.repo}`, prId: pr.id, title: pr.title };
+      summary = `${remote.workspace}/${remote.repo} #${pr.id} "${pr.title}" (branch ${branch})`;
     } else {
-      const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-      const pr = branch ? await findPrForBranch(remote.workspace, remote.repo, branch) : null;
-      if (pr) {
-        path = `#/${remote.workspace}/${remote.repo}/${pr.id}`;
-        summary = `${remote.workspace}/${remote.repo} #${pr.id} "${pr.title}" (branch ${branch})`;
-      } else {
-        summary = `pull request list — no open PR found for branch ${branch}`;
-      }
+      session = { kind: "local", cwd: process.cwd(), base: flags.base };
+      summary = `a local review of ${branch}${flags.local ? "" : " (no open PR for this branch)"}`;
     }
   }
 
   await ensureServer();
+
+  let id: string | null = null;
+  if (session && (flags.wait || session.kind === "local")) {
+    id = await createSession(session);
+    path =
+      session.kind === "local"
+        ? `#/local/${id}`
+        : `#/${String(session.repo)}/${String(session.prId)}${flags.wait ? `?agent=${id}` : ""}`;
+  } else if (session) {
+    path = `#/${String(session.repo)}/${String(session.prId)}`;
+  }
+
   const target = `${base}/${path}`;
   openBrowser(target);
   console.log(`visual-review: opened ${summary}\n${target}`);
+
+  if (!id || !flags.wait) return;
+  console.log("visual-review: waiting for the review in the browser…\n");
+  console.log(await waitForResult(id));
 }
 
 await main();

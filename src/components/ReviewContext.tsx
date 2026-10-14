@@ -7,10 +7,9 @@ export interface ReviewActions {
   drafts: Draft[];
   saveDraft(draft: Omit<Draft, "id"> & { id?: string }): void;
   discardDraft(id: string): void;
-  postNow(input: { body: string; anchor?: Anchor; parentId?: number }): Promise<unknown>;
-  resolve(commentId: number, resolved: boolean): void;
+  postNow?(input: { body: string; anchor?: Anchor; parentId?: number }): Promise<unknown>;
+  resolve?(commentId: number, resolved: boolean): void;
   closeComposer(): void;
-  isPosting: boolean;
 }
 
 export const ReviewContext = createContext<ReviewActions | null>(null);

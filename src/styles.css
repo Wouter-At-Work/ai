@@ -1087,3 +1087,37 @@ kbd {
     margin-left: 0;
   }
 }
+
+/* Agent mode */
+
+.avatar-initial {
+  display: inline-grid;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  place-items: center;
+}
+
+.agent-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.agent-dot.live {
+  background: var(--accent-green);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-green) 22%, transparent);
+}
+
+.notice {
+  max-width: 820px;
+  margin: 8px 0 16px 8px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--accent-green) 10%, var(--bg-canvas));
+  color: var(--text-strong);
+}
+
+.dismiss {
+  color: var(--text-tertiary);
+}

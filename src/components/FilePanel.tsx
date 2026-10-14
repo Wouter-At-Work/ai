@@ -42,10 +42,13 @@ function AnchorComposer({ anchor }: { anchor: Anchor }) {
           review.saveDraft({ body, anchor });
           review.closeComposer();
         }}
-        onPost={async (body) => {
-          await review.postNow({ body, anchor });
-          review.closeComposer();
-        }}
+        onPost={
+          review.postNow &&
+          (async (body) => {
+            await review.postNow?.({ body, anchor });
+            review.closeComposer();
+          })
+        }
         onCancel={review.closeComposer}
       />
     </div>

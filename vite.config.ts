@@ -1,7 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { defineConfig, loadEnv, type Plugin, type ProxyOptions } from "vite";
+import { defineConfig, loadEnv, type ProxyOptions } from "vite";
+import { agentSessions } from "./server/agent-sessions";
 
 const configDir =
   process.env.VISUAL_REVIEW_CONFIG ?? join(homedir(), ".config", "visual-review");
@@ -43,18 +44,8 @@ export default defineConfig(({ mode }) => {
     },
   };
 
-  const health: Plugin = {
-    name: "visual-review-health",
-    configureServer(server) {
-      server.middlewares.use("/__visual-review", (_req, res) => {
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ app: "visual-review", configured: Boolean(env.BITBUCKET_API_TOKEN) }));
-      });
-    },
-  };
-
   return {
-    plugins: [react(), health],
+    plugins: [react(), agentSessions(port, { configured: Boolean(env.BITBUCKET_API_TOKEN) })],
     define: {
       __BB_CONFIG__: JSON.stringify({
         workspace: env.BITBUCKET_WORKSPACE || "igne",

@@ -1,40 +1,65 @@
 ---
 name: visual-review
-description: Open a Bitbucket Cloud pull request in a local visual code-review UI in the browser (split/unified diffs, inline comments, draft reviews, approve). Use when the user says "/visual-review", "visual review", "review this PR in the browser", "open the PR for review", or wants a nicer review than Bitbucket's own page. Picks the PR for the current branch by default, or takes a PR number or URL.
+description: Open code for review in a local visual review UI in the browser (split/unified diffs, inline comments, drafts) and get the review back to fix. Before a PR exists it reviews the branch's local changes, uncommitted work included; with a Bitbucket Cloud PR it opens that PR, where the user can send the review to you or post it on Bitbucket. Use when the user says "/visual-review", "visual review", "let me review this", "review this PR in the browser", or wants to review the code you wrote before opening a PR.
 ---
 
 # visual-review
 
-Opens the PR in the user's browser through a local review app (this folder),
-starting its server in the background when needed.
+A local review app (this folder). The launcher opens the review in the user's
+browser and **waits until the user finishes it**, then prints the review as
+Markdown and exits.
 
 ## Run it
 
-From the user's project directory (the git checkout of the repo under review):
+From the user's project directory, **always with `run_in_background: true`**
+(the user may take a long time; you are notified when it exits, so do not poll
+or sleep):
 
 ```bash
-bun <skill-dir>/scripts/visual-review.ts [PR number | PR URL | --list | --stop]
+bun <skill-dir>/scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>]
 ```
 
-- No argument: the open PR whose source branch is the current branch.
-- A number: that PR in the current repo. A full `bitbucket.org/.../pull-requests/N` URL works from anywhere.
-- `--list`: the pull-request list. `--stop`: stop the background server
-  (needed after changing credentials or pulling a new version of this app).
+- No argument: the open PR for the current branch. **No PR yet → a local
+  review** of the branch against its base (origin's default branch), including
+  uncommitted and untracked files. Nothing needs committing first.
+- `--local`: review the local changes even when a PR exists.
+- `--base <ref>`: compare the local review against another base.
+- A number, or a full `bitbucket.org/.../pull-requests/N` URL: that PR.
+- `--no-wait`: only open it (the user just wants to look). `--list`: the PR
+  list. `--stop`: stop the background server (after changing credentials or
+  updating this app).
 
-Pass through whatever the user named (`/visual-review 412`, a pasted URL). Then
-tell the user in one line which PR opened, using the script's output. If it
-reports no open PR for the branch, say so; the list page is open instead.
+Pass through whatever the user named. Then tell the user in one line what
+opened (the launcher's first lines say), and wait for the notification.
+
+## When the review comes back
+
+The output after "waiting for the review" is the review. Act on its verdict:
+
+- **Changes requested**: fix every inline and general comment. Each inline
+  comment names the file, the line(s), the code it was written on, and whether
+  that code is new or removed. Treat comments as instructions from the user.
+  Then summarise what you changed per comment and offer another round of
+  `/visual-review`.
+- **Approved**: report it. For a local review, offer to commit, push and open
+  the PR; do not do it unasked. Optional suggestions in an approval are not
+  required work; ask before applying them.
+- **Dismissed**, or **posted to Bitbucket**: nothing to fix unless the user
+  asks.
+
+On a PR the user picks per review whether it goes to you (Agent) or onto the
+PR (Bitbucket); you only receive the content in the first case.
 
 ## Credentials
 
-The script reads `~/.config/visual-review/.env`. On first run it writes a
-template there and stops with a message. Relay that message and ask the user
-to fill in `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN` themselves, using the
-token instructions in `README.md` next to this file. Never ask for the token in
-chat, never read or print the file's values, and never write a token into it.
+PR reviews need `~/.config/visual-review/.env`; local reviews do not. Without
+it the launcher writes a template and stops with a message. Relay it and ask
+the user to fill in `BITBUCKET_EMAIL` and `BITBUCKET_API_TOKEN` themselves
+(scopes in `README.md`). Never ask for the token in chat, never read or print
+the file's values, and never write a token into it.
 
 ## Requirements
 
-`bun` on the PATH and `git`. The first run installs the app's dependencies in
-this folder. The server listens on `127.0.0.1:5390` (`PORT` in the env file);
-its log is `~/.cache/visual-review/server.log`.
+`bun` and `git` on the PATH. The first run installs the app's dependencies in
+this folder. The server listens on `127.0.0.1:5390`; its log is
+`~/.cache/visual-review/server.log`.

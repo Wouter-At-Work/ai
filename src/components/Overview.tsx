@@ -58,7 +58,7 @@ export function Overview({ pr, threads, orphanThreads, commentsError }: Overview
         autoFocus={false}
         placeholder="Comment on the pull request…"
         onDraft={(body) => review.saveDraft({ body })}
-        onPost={(body) => review.postNow({ body })}
+        onPost={review.postNow && ((body) => review.postNow?.({ body }))}
       />
     </section>
   );

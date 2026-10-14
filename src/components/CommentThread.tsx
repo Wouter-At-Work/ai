@@ -46,10 +46,13 @@ export function DraftCard({ draft }: { draft: Draft }) {
           review.saveDraft({ ...draft, body });
           setEditing(false);
         }}
-        onPost={async (body) => {
-          await review.postNow({ body, anchor: draft.anchor, parentId: draft.parentId });
-          review.discardDraft(draft.id);
-        }}
+        onPost={
+          review.postNow &&
+          (async (body) => {
+            await review.postNow?.({ body, anchor: draft.anchor, parentId: draft.parentId });
+            review.discardDraft(draft.id);
+          })
+        }
         onCancel={() => setEditing(false)}
       />
     );
@@ -124,26 +127,28 @@ export function CommentThread({ thread, drafts }: { thread: Thread; drafts: Draf
                 setReplying(false);
               }}
               onPost={async (body) => {
-                await review.postNow({ body, parentId: thread.root.id });
+                await review.postNow?.({ body, parentId: thread.root.id });
                 setReplying(false);
               }}
               onCancel={() => setReplying(false)}
             />
           ) : (
+            review.postNow && (
             <div className="thread-actions">
               <button type="button" className="button small" onClick={() => setReplying(true)}>
                 Reply
               </button>
-              {!thread.root.deleted && (
+              {!thread.root.deleted && review.resolve && (
                 <button
                   type="button"
                   className="button ghost small"
-                  onClick={() => review.resolve(thread.root.id, !resolved)}
+                  onClick={() => review.resolve?.(thread.root.id, !resolved)}
                 >
                   {resolved ? "Reopen" : "Resolve"}
                 </button>
               )}
             </div>
+            )
           )}
         </>
       )}

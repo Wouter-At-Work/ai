@@ -23,15 +23,30 @@ linking it into your skills directory:
 ln -s "$PWD" ~/.claude/skills/visual-review    # or $CLAUDE_CONFIG_DIR/skills
 ```
 
-Then `/visual-review` in any Bitbucket checkout opens the PR for the current
-branch (or `/visual-review 412`, or a PR URL). The launcher works without Claude too:
+Then `/visual-review` opens the review in your browser and the agent waits for it:
+
+- **Before a PR exists**, it reviews the branch locally: the working tree against
+  the merge base with `origin`'s default branch, uncommitted and untracked files
+  included. Your review goes straight back to the agent to fix.
+- **With a PR**, it opens the PR with a mode toggle: **Agent** sends the review to
+  the waiting agent instead of posting it, **Bitbucket** posts it on the PR as usual.
+  Without a waiting agent, Agent mode copies the review as Markdown.
+
+The launcher works without Claude too:
 
 ```sh
-bun scripts/visual-review.ts [PR number | PR URL | --list | --stop]
+bun scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>] [--no-wait]
+bun scripts/visual-review.ts --list | --stop
 ```
 
 It starts the server in the background on first use (log in
-`~/.cache/visual-review/server.log`) and opens your browser.
+`~/.cache/visual-review/server.log`), opens your browser and, unless `--no-wait`,
+prints the finished review to stdout as Markdown.
+
+Review sessions live in `~/.cache/visual-review/sessions`. Creating one or
+reading its result needs the secret in `~/.cache/visual-review/secret`, and the
+server refuses requests whose `Host` or `Origin` is not its own address, so
+another web page cannot read your working tree through it.
 
 ## Setup
 

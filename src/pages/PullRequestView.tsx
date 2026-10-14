@@ -1,11 +1,8 @@
-import {
-  useStableCallback,
-  type FileDiffMetadata,
-  type FileDiffOptions,
-  type SelectedLineRange,
-} from "@pierre/diffs/react";
+import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { formatAgentReview, type AgentVerdict } from "../../shared/agent-review";
+import { sessionQuery, submitSession } from "../api/agent";
 import { bitbucket } from "../api/bitbucket";
 import {
   commentsQuery,
@@ -18,123 +15,107 @@ import {
 } from "../api/queries";
 import type { Account } from "../api/types";
 import { DotIcon } from "../components/DotIcon";
-import { FileList } from "../components/FileList";
-import { FilePanel } from "../components/FilePanel";
+import { ModeToggle, type ReviewMode } from "../components/ModeToggle";
 import { Overview } from "../components/Overview";
-import { ReviewContext, type ReviewActions } from "../components/ReviewContext";
 import { ReviewerStack } from "../components/Reviewers";
+import { ReviewWorkspace } from "../components/ReviewWorkspace";
 import { ErrorBox } from "../components/Status";
-import { SubmitReview, type Verdict } from "../components/SubmitReview";
-import {
-  buildThreads,
-  fileAnnotations,
-  fileMatches,
-  fileVersion,
-  toInline,
-  type Anchor,
-  type Draft,
-  type LineNotes,
-} from "../lib/review";
+import { SubmitReview } from "../components/SubmitReview";
+import { AGENT_VERDICTS } from "../lib/agent-verdicts";
+import { buildAgentReview } from "../lib/agent";
 import { ICONS } from "../lib/dot-icons";
-import { useStoredState } from "../lib/storage";
+import { useDrafts } from "../lib/drafts";
+import { buildThreads, fileMatches, toInline } from "../lib/review";
+
+type BitbucketVerdict = "comment" | "approve" | "request-changes";
+
+const BITBUCKET_VERDICTS = [
+  { value: "comment" as const, label: "Comment", hint: "Post your comments without a verdict." },
+  { value: "approve" as const, label: "Approve", hint: "Approve the pull request." },
+  { value: "request-changes" as const, label: "Request changes", hint: "Block merging until addressed." },
+];
 
 interface Props {
   repo: string;
   id: number;
   me: Account;
+  agentSession?: string;
 }
 
-export function PullRequestView({ repo, id, me }: Props) {
+export function PullRequestView({ repo, id, me, agentSession }: Props) {
   const queryClient = useQueryClient();
   const pr = useQuery(pullRequestQuery(repo, id));
   const comments = useQuery(commentsQuery(repo, id));
-  const sourceHash = pr.data?.source.commit?.hash;
-  const diff = useQuery(diffQuery(repo, id, sourceHash));
+  const diff = useQuery(diffQuery(repo, id, pr.data?.source.commit?.hash));
+  const session = useQuery({ ...sessionQuery(agentSession ?? ""), enabled: Boolean(agentSession) });
+  const [mode, setMode] = useState<ReviewMode>(agentSession ? "agent" : "bitbucket");
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const [diffStyle, setDiffStyle] = useStoredState<"split" | "unified">("diffStyle", "split");
-  const [viewed, setViewed] = useStoredState<string[]>(`viewed:${repo}:${id}`, []);
-  const [drafts, setDrafts] = useStoredState<Draft[]>(`drafts:${repo}:${id}`, []);
-  const [composer, setComposer] = useState<Anchor | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-
+  const storageKey = `${repo}:${id}`;
+  const { drafts, discardDraft, clearDrafts } = useDrafts(storageKey);
   const addComment = useAddComment(repo, id);
   const resolveComment = useResolveComment(repo, id);
   const setReview = useSetReview(repo, id);
 
   const files = diff.data ?? [];
   const threads = buildThreads(comments.data ?? []);
-  const isViewed = (file: FileDiffMetadata) => viewed.includes(fileVersion(file));
   const myState =
     pr.data?.participants.find((participant) => participant.user.uuid === me.uuid)?.state ?? null;
+  const sessionOpen = session.data?.status === "open";
 
-  const toggleViewed = (file: FileDiffMetadata) => {
-    const version = fileVersion(file);
-    setViewed((current) =>
-      current.includes(version) ? current.filter((v) => v !== version) : [...current, version],
-    );
-  };
+  async function releaseSession(submission: Parameters<typeof submitSession>[1]) {
+    if (!agentSession || !sessionOpen) return;
+    await submitSession(agentSession, submission);
+    await queryClient.invalidateQueries({ queryKey: ["session", agentSession] });
+  }
 
-  const goTo = (index: number) => {
-    const clamped = Math.max(0, Math.min(files.length - 1, index));
-    setActiveIndex(clamped);
-    document.getElementById(`file-${clamped}`)?.scrollIntoView({ block: "start" });
-  };
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, dialog")) {
-        return;
-      }
-      const file = files[activeIndex];
-      if (event.key === "j") goTo(activeIndex + 1);
-      else if (event.key === "k") goTo(activeIndex - 1);
-      else if (event.key === "s") setDiffStyle((style) => (style === "split" ? "unified" : "split"));
-      else if (event.key === "v" && file) {
-        toggleViewed(file);
-        if (!isViewed(file)) goTo(activeIndex + 1);
-      } else return;
-      event.preventDefault();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  const postNow: ReviewActions["postNow"] = ({ body, anchor, parentId }) =>
-    addComment.mutateAsync({ body, parentId, inline: anchor ? toInline(anchor) : undefined });
-
-  const review: ReviewActions = {
-    me,
-    drafts,
-    saveDraft: (draft) =>
-      setDrafts((current) => {
-        const withId = { ...draft, id: draft.id ?? crypto.randomUUID() };
-        return current.some((d) => d.id === withId.id)
-          ? current.map((d) => (d.id === withId.id ? withId : d))
-          : [...current, withId];
-      }),
-    discardDraft: (draftId) => setDrafts((current) => current.filter((d) => d.id !== draftId)),
-    postNow,
-    resolve: (commentId, resolved) => resolveComment.mutate({ commentId, resolved }),
-    closeComposer: () => setComposer(null),
-    isPosting: addComment.isPending,
-  };
-
-  async function submitReview({ verdict, summary }: { verdict: Verdict; summary: string }) {
+  async function submitToBitbucket({ verdict, summary }: { verdict: BitbucketVerdict; summary: string }) {
+    let posted = 0;
     for (const draft of drafts) {
       await bitbucket.addComment(repo, id, {
         body: draft.body,
         parentId: draft.parentId,
         inline: draft.anchor ? toInline(draft.anchor) : undefined,
       });
-      review.discardDraft(draft.id);
+      discardDraft(draft.id);
+      posted++;
     }
-    if (summary.trim()) await bitbucket.addComment(repo, id, { body: summary });
+    if (summary.trim()) {
+      await bitbucket.addComment(repo, id, { body: summary });
+      posted++;
+    }
     await queryClient.invalidateQueries({ queryKey: ["comments", repo, id] });
     if (verdict !== "comment") await setReview.mutateAsync(verdict);
+    await releaseSession({ destination: "bitbucket", posted, verdict });
+    setNotice(`Posted ${posted} comment${posted === 1 ? "" : "s"} to Bitbucket.`);
   }
 
-  const loadDiffFiles = useStableCallback(async (file: FileDiffMetadata) => {
+  async function submitToAgent({ verdict, summary }: { verdict: AgentVerdict; summary: string }) {
+    const review = buildAgentReview(files, drafts, verdict, summary);
+    if (agentSession && sessionOpen) {
+      await submitSession(agentSession, { destination: "agent", review });
+      await queryClient.invalidateQueries({ queryKey: ["session", agentSession] });
+      setNotice("Review sent to the agent. You can close this tab.");
+    } else {
+      const markdown = formatAgentReview(
+        {
+          id: "",
+          kind: "pr",
+          title: pr.data?.title ?? `${repo} #${id}`,
+          createdAt: new Date().toISOString(),
+          status: "submitted",
+          repo,
+          prId: id,
+        },
+        review,
+      );
+      await navigator.clipboard.writeText(markdown);
+      setNotice("No agent is waiting on this review, so it was copied as Markdown. Paste it to your agent.");
+    }
+    clearDrafts();
+  }
+
+  async function loadDiffFiles(file: FileDiffMetadata) {
     if (!pr.data?.source.commit || !pr.data.destination.commit) {
       throw new Error("Pull request commits are unknown");
     }
@@ -151,23 +132,7 @@ export function PullRequestView({ repo, id, me }: Props) {
     return oldContents === null
       ? { oldFile: null, newFile }
       : { oldFile: { name: oldPath, contents: oldContents }, newFile };
-  });
-
-  const options: FileDiffOptions<LineNotes, undefined> = {
-    diffStyle,
-    themeType: "system",
-    theme: { dark: "pierre-dark", light: "pierre-light" },
-    lineDiffType: "word",
-    overflow: "scroll",
-    loadDiffFiles,
-  };
-
-  const openComposer = (file: FileDiffMetadata, range: SelectedLineRange) => {
-    const side = range.endSide ?? range.side ?? "additions";
-    const start = Math.min(range.start, range.end);
-    const end = Math.max(range.start, range.end);
-    setComposer({ path: file.name, side, line: end, startLine: start === end ? undefined : start });
-  };
+  }
 
   if (pr.isError) {
     return (
@@ -186,38 +151,30 @@ export function PullRequestView({ repo, id, me }: Props) {
       !files.some((file) => thread.root.inline && fileMatches(file, thread.root.inline.path)),
   );
 
+  const toAgent = mode === "agent";
+
   return (
-    <ReviewContext value={review}>
-      <div className="review-layout">
-        <header className="review-header">
-          <a className="button icon" href="#/" title="All pull requests">
-            <DotIcon icon={ICONS.arrowLeft} label="All pull requests" />
-          </a>
-          <div className="review-title">
-            <h1>
-              {pr.data.title} <span className="muted">#{pr.data.id}</span>
-            </h1>
-            <span className="label">
-              {repo} · {pr.data.source.branch.name} → {pr.data.destination.branch.name} ·{" "}
-              {pr.data.author.display_name}
-              {pr.data.state !== "OPEN" && <span className="tag">{pr.data.state.toLowerCase()}</span>}
-            </span>
-          </div>
+    <ReviewWorkspace
+      storageKey={storageKey}
+      me={me}
+      backHref="#/"
+      title={
+        <>
+          <h1>
+            {pr.data.title} <span className="muted">#{pr.data.id}</span>
+          </h1>
+          <span className="label">
+            {repo} · {pr.data.source.branch.name} → {pr.data.destination.branch.name} ·{" "}
+            {pr.data.author.display_name}
+            {pr.data.state !== "OPEN" && <span className="tag">{pr.data.state.toLowerCase()}</span>}
+          </span>
+        </>
+      }
+      actions={
+        <>
           <ReviewerStack pr={pr.data} />
-          <div className="segmented" role="group" aria-label="Diff layout">
-            {(["split", "unified"] as const).map((style) => (
-              <button
-                key={style}
-                type="button"
-                aria-pressed={diffStyle === style}
-                onClick={() => setDiffStyle(() => style)}
-              >
-                <DotIcon icon={style === "split" ? ICONS.split : ICONS.unified} />
-                {style === "split" ? "Split" : "Unified"}
-              </button>
-            ))}
-          </div>
-          {myState && (
+          <ModeToggle mode={mode} onChange={setMode} agentWaiting={sessionOpen} />
+          {!toAgent && myState && (
             <button
               type="button"
               className="button ghost"
@@ -231,47 +188,64 @@ export function PullRequestView({ repo, id, me }: Props) {
             Bitbucket
             <DotIcon icon={ICONS.arrowUpRight} />
           </a>
-          <SubmitReview drafts={drafts} myState={myState} onSubmit={submitReview} />
-        </header>
-
-        <FileList
-          files={files}
-          activeIndex={activeIndex}
-          isViewed={isViewed}
-          commentCount={(file) =>
-            threads.filter((t) => t.root.inline && fileMatches(file, t.root.inline.path)).length
-          }
-          onSelect={goTo}
-        />
-
-        <main className="review-main">
-          <Overview
-            pr={pr.data}
-            threads={threads.filter((thread) => !thread.root.inline)}
-            orphanThreads={orphanThreads}
-            commentsError={comments.error}
-          />
-          {diff.isPending && <p className="muted">Loading diff…</p>}
-          {diff.isError && <ErrorBox title="Could not load the diff" error={diff.error} />}
-          {diff.isSuccess && files.length === 0 && <p className="muted">This pull request has no changes.</p>}
-          {files.map((file, index) => (
-            <FilePanel
-              key={file.name}
-              file={file}
-              index={index}
-              active={index === activeIndex}
-              viewed={isViewed(file)}
-              options={options}
-              annotations={fileAnnotations(file, threads, drafts, composer)}
-              onToggleViewed={() => toggleViewed(file)}
-              onComment={(range) => {
-                setActiveIndex(index);
-                openComposer(file, range);
-              }}
+          {toAgent ? (
+            <SubmitReview
+              key="agent"
+              drafts={drafts}
+              verdicts={AGENT_VERDICTS}
+              title="Send your review to the agent"
+              buttonLabel={sessionOpen ? "Send to agent" : "Copy review"}
+              submitLabel={sessionOpen ? "Send to agent" : "Copy as Markdown"}
+              note={sessionOpen ? "Nothing is posted to Bitbucket." : "No agent is waiting; the review is copied as Markdown."}
+              allowEmpty={(verdict) => verdict === "approve"}
+              onSubmit={submitToAgent}
+              onDismiss={
+                sessionOpen ? () => submitToAgent({ verdict: "dismissed", summary: "" }) : undefined
+              }
             />
-          ))}
-        </main>
-      </div>
-    </ReviewContext>
+          ) : (
+            <SubmitReview
+              key="bitbucket"
+              drafts={drafts}
+              verdicts={BITBUCKET_VERDICTS}
+              title="Post your review to Bitbucket"
+              buttonLabel="Finish review"
+              submitLabel="Post review"
+              note={
+                myState === "approved"
+                  ? "You currently approve this pull request."
+                  : myState === "changes_requested"
+                    ? "You currently request changes."
+                    : undefined
+              }
+              allowEmpty={(verdict) => verdict !== "comment"}
+              onSubmit={submitToBitbucket}
+            />
+          )}
+        </>
+      }
+      banner={notice && <p className="notice">{notice}</p>}
+      overview={
+        <Overview
+          pr={pr.data}
+          threads={threads.filter((thread) => !thread.root.inline)}
+          orphanThreads={orphanThreads}
+          commentsError={comments.error}
+        />
+      }
+      files={files}
+      diffPending={diff.isPending}
+      diffError={diff.error}
+      emptyText="This pull request has no changes."
+      threads={threads}
+      postNow={
+        toAgent
+          ? undefined
+          : ({ body, anchor, parentId }) =>
+              addComment.mutateAsync({ body, parentId, inline: anchor ? toInline(anchor) : undefined })
+      }
+      resolve={toAgent ? undefined : (commentId, resolved) => resolveComment.mutate({ commentId, resolved })}
+      loadDiffFiles={loadDiffFiles}
+    />
   );
 }
