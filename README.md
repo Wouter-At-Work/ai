@@ -24,5 +24,5 @@ Only my own skills live here. Third-party skills are installed separately and ar
 
 - Needs `bun` and `git`. `install.sh` installs its dependencies.
 - PR reviews need `~/.config/visual-review/.env` (see `.env.example`). Local reviews work without it.
-- The Exposure font is licensed, so it's gitignored. Copy `exposure-*.woff2` into
-  `skills/visual-review/src/fonts/` by hand.
+- The Exposure font is licensed, so it's gitignored. Copy `exposure-*.woff2` from `creative-portfolio/src/app/(frontend)/fonts/` into
+  `skills/visual-review/src/fonts/` (create the folder) by hand.
