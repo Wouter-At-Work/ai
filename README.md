@@ -16,17 +16,9 @@ Run `install.sh` again after adding a new skill.
 
 ## Skills
 
-| Skill | Source |
-| --- | --- |
-| `visual-review` | Mine. Merged in from the `bb-review` repo with its history. See its README. |
-| `i-have-adhd` | Third-party (MIT) |
-| `fluid-functionalism` | Third-party ([fluidfunctionalism.com](https://fluidfunctionalism.com)) |
-| `design-taste-frontend`, `brandkit`, `gpt-taste`, `high-end-visual-design`, `minimalist-ui`, `industrial-brutalist-ui`, `redesign-existing-projects`, `stitch-design-taste`, `image-to-code`, `imagegen-frontend-web`, `imagegen-frontend-mobile`, `full-output-enforcement` | Third-party. `design-taste-frontend` comes from [Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill); the others were installed in the same batch, so probably the same pack (not confirmed) |
+Only my own skills live here. Third-party skills are installed separately and aren't tracked.
 
-The third-party skills are copied in as-is so one clone gets everything. To update one,
-copy the new version over its folder and commit.
-
-`omarchy` and `diagnose-crash` aren't here because Omarchy ships them with the system.
+- `visual-review`: merged in from the old `bb-review` repo, with its history. See its README.
 
 ### visual-review setup on a new machine
 
