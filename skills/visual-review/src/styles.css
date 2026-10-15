@@ -826,6 +826,7 @@ kbd {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 14px;
+  align-items: start;
 }
 
 .screenshot {
@@ -835,8 +836,12 @@ kbd {
   background: var(--bg-chrome);
 }
 
-.screenshot a {
+.screenshot button {
   display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  cursor: zoom-in;
   overflow: hidden;
   border-radius: 6px;
   background: var(--bg-surface);
@@ -852,8 +857,58 @@ kbd {
   transition: transform 220ms var(--spring);
 }
 
-.screenshot a:hover img {
+.screenshot button:hover img {
   transform: scale(1.015);
+}
+
+.lightbox {
+  max-width: none;
+  max-height: none;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 24px 24px 0;
+  border: 0;
+  background: transparent;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.lightbox[open] {
+  display: flex;
+}
+
+.lightbox::backdrop {
+  background: rgb(10 10 10 / 0.86);
+  backdrop-filter: blur(4px);
+}
+
+.lightbox img {
+  flex: 1;
+  min-height: 0;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: zoom-out;
+  pointer-events: none;
+}
+
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-chrome);
+}
+
+.lightbox-caption {
+  padding: 0 10px;
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 .screenshot figcaption {
