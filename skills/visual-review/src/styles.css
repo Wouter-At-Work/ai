@@ -751,6 +751,118 @@ kbd {
   max-width: 100%;
 }
 
+/* What the agent attached: its draft PR description and screenshots */
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 36px 0 12px;
+}
+
+.section-head .section-title {
+  margin: 0;
+}
+
+.section-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.description-card {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-raised);
+  font-size: 15px;
+}
+
+.description-card h1,
+.description-card h2,
+.description-card h3 {
+  color: var(--text-strong);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.description-card h1 {
+  font-size: 22px;
+}
+
+.description-card h2 {
+  font-size: 18px;
+}
+
+.description-card h3 {
+  font-size: 16px;
+}
+
+.description-card code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bg-inset);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.description-card pre code {
+  padding: 0;
+  background: none;
+}
+
+/* More specific than the shared textarea rule below, which sets font: inherit */
+.agent-description .description-editor {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.agent-description > .muted {
+  margin: 8px 0 0;
+}
+
+.screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.screenshot {
+  margin: 0;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-chrome);
+}
+
+.screenshot a {
+  display: block;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  object-position: top;
+  transition: transform 220ms var(--spring);
+}
+
+.screenshot a:hover img {
+  transform: scale(1.015);
+}
+
+.screenshot figcaption {
+  padding: 8px 4px 2px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* Files sit in a chrome frame: 6px padding, radius 12 outside, 6 inside */
 
 .file-panel {
@@ -939,7 +1051,8 @@ kbd {
 }
 
 .composer textarea,
-.submit-dialog textarea {
+.submit-dialog textarea,
+.description-editor {
   width: 100%;
   min-height: 84px;
   padding: 10px 12px;
@@ -960,7 +1073,8 @@ kbd {
 }
 
 .composer textarea:focus,
-.submit-dialog textarea:focus {
+.submit-dialog textarea:focus,
+.description-editor:focus {
   box-shadow: inset 0 0 0 1px var(--text-tertiary);
   outline: none;
 }

@@ -9,6 +9,8 @@
  *   visual-review.ts <PR url>       any Bitbucket PR
  *   visual-review.ts --local        a local review even when the branch has a PR
  *   visual-review.ts --base <ref>   the base for a local review (default: origin's default branch)
+ *   visual-review.ts --description <file>          the agent's draft PR description (Markdown)
+ *   visual-review.ts --screenshot <file>[::caption]  attach a screenshot; repeat for more
  *   visual-review.ts --no-wait      open the review without waiting for it
  *   visual-review.ts --list         the pull request list
  *   visual-review.ts --stop         stop the background server
@@ -16,7 +18,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 const appDir = join(dirname(import.meta.path), "..");
 const configDir = process.env.VISUAL_REVIEW_CONFIG ?? join(homedir(), ".config", "visual-review");
@@ -135,7 +137,16 @@ function openBrowser(url: string) {
 const secretFile = join(stateDir, "secret");
 
 function parseArgs(argv: string[]) {
-  const flags = { local: false, wait: true, list: false, stop: false, base: "", target: "" };
+  const flags = {
+    local: false,
+    wait: true,
+    list: false,
+    stop: false,
+    base: "",
+    target: "",
+    description: "",
+    screenshots: [] as string[],
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
     if (arg === "--local") flags.local = true;
@@ -143,6 +154,8 @@ function parseArgs(argv: string[]) {
     else if (arg === "--list") flags.list = true;
     else if (arg === "--stop") flags.stop = true;
     else if (arg === "--base") flags.base = argv[++i] ?? "";
+    else if (arg === "--description") flags.description = argv[++i] ?? "";
+    else if (arg === "--screenshot") flags.screenshots.push(argv[++i] ?? "");
     else if (arg.startsWith("--")) fail(`unknown option ${arg}`);
     else flags.target = arg;
   }
@@ -158,6 +171,21 @@ function requireCredentials() {
   fail(
     `no Bitbucket credentials yet. Fill in BITBUCKET_EMAIL and BITBUCKET_API_TOKEN in ${envFile} (template written), then run again. Local reviews (--local) work without them.`,
   );
+}
+
+/** Reads the description and screenshot files named on the command line into the session body. */
+function attachments(flags: ReturnType<typeof parseArgs>) {
+  const read = (path: string) => {
+    if (!path || !existsSync(path)) fail(`no such file: ${path || "(missing path)"}`);
+    return readFileSync(path);
+  };
+  return {
+    description: flags.description ? read(flags.description).toString("utf8") : undefined,
+    screenshots: flags.screenshots.map((spec) => {
+      const [path = "", ...caption] = spec.split("::");
+      return { name: basename(path), caption: caption.join("::").trim(), data: read(path).toString("base64") };
+    }),
+  };
 }
 
 async function createSession(input: Record<string, unknown>) {
@@ -233,13 +261,16 @@ async function main() {
 
   let id: string | null = null;
   if (session && (flags.wait || session.kind === "local")) {
-    id = await createSession(session);
+    id = await createSession({ ...session, ...attachments(flags) });
     path =
       session.kind === "local"
         ? `#/local/${id}`
         : `#/${String(session.repo)}/${String(session.prId)}${flags.wait ? `?agent=${id}` : ""}`;
   } else if (session) {
     path = `#/${String(session.repo)}/${String(session.prId)}`;
+    if (flags.description || flags.screenshots.length) {
+      console.log("visual-review: --no-wait on a PR opens it without a session; the description and screenshots are not shown");
+    }
   }
 
   const target = `${base}/${path}`;

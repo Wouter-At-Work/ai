@@ -1,9 +1,10 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { AgentVerdict } from "../../shared/agent-review";
+import type { AgentVerdict, SessionInfo } from "../../shared/agent-review";
 import { localDiffQuery, localFile, sessionQuery, submitSession } from "../api/agent";
 import type { Account } from "../api/types";
+import { AgentAttachments, useDraftDescription } from "../components/AgentAttachments";
 import { DraftCard } from "../components/CommentThread";
 import { Composer } from "../components/Composer";
 import { useReview } from "../components/ReviewContext";
@@ -14,7 +15,13 @@ import { buildAgentReview } from "../lib/agent";
 import { AGENT_VERDICTS } from "../lib/agent-verdicts";
 import { useDrafts } from "../lib/drafts";
 
-function LocalOverview({ fileCount }: { fileCount: number }) {
+interface LocalOverviewProps {
+  fileCount: number;
+  session: SessionInfo;
+  description: ReturnType<typeof useDraftDescription>;
+}
+
+function LocalOverview({ fileCount, session, description }: LocalOverviewProps) {
   const review = useReview();
   const notes = review.drafts.filter((draft) => !draft.anchor && !draft.parentId);
   return (
@@ -24,6 +31,7 @@ function LocalOverview({ fileCount }: { fileCount: number }) {
         Nothing here is on Bitbucket yet: your review goes straight back to the agent that is waiting on
         it.
       </p>
+      <AgentAttachments session={session} description={description} />
       {notes.length > 0 && <h2 className="section-title">General comments</h2>}
       {notes.map((draft) => (
         <DraftCard key={draft.id} draft={draft} />
@@ -45,11 +53,12 @@ export function LocalReviewView({ sessionId, me }: { sessionId: string; me: Acco
 
   const storageKey = `local:${session.data?.repoName}:${session.data?.branch}`;
   const { drafts, clearDrafts } = useDrafts(storageKey);
+  const description = useDraftDescription(session.data);
   const files = diff.data ?? [];
   const open = session.data?.status === "open";
 
   async function send({ verdict, summary }: { verdict: AgentVerdict; summary: string }) {
-    const review = buildAgentReview(files, drafts, verdict, summary);
+    const review = { ...buildAgentReview(files, drafts, verdict, summary), description: description.edited };
     await submitSession(sessionId, { destination: "agent", review });
     await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
     if (verdict !== "dismissed") clearDrafts();
@@ -119,7 +128,7 @@ export function LocalReviewView({ sessionId, me }: { sessionId: string; me: Acco
             buttonLabel={open ? "Send to agent" : "Sent"}
             submitLabel="Send to agent"
             disabled={!open}
-            allowEmpty={(verdict) => verdict === "approve"}
+            allowEmpty={(verdict) => verdict === "approve" || description.edited !== undefined}
             onSubmit={send}
             onDismiss={() => send({ verdict: "dismissed", summary: "" })}
           />
@@ -130,7 +139,7 @@ export function LocalReviewView({ sessionId, me }: { sessionId: string; me: Acco
           <p className="notice">{notice ?? "This review was already sent to the agent."}</p>
         )
       }
-      overview={<LocalOverview fileCount={files.length} />}
+      overview={<LocalOverview fileCount={files.length} session={session.data} description={description} />}
       files={files}
       diffPending={diff.isPending}
       diffError={diff.error}

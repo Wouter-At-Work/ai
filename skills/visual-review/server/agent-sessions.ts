@@ -14,16 +14,32 @@ import {
   type Submission,
 } from "../shared/agent-review";
 
-interface StoredSession extends SessionInfo {
+interface StoredScreenshot {
+  caption: string;
+  file: string;
+  type: string;
+}
+
+interface StoredSession extends Omit<SessionInfo, "screenshots"> {
   repoRoot?: string;
   result?: SessionResult;
+  screenshots?: StoredScreenshot[];
 }
 
 const stateDir = join(homedir(), ".cache", "visual-review");
 const sessionDir = join(stateDir, "sessions");
 const secretFile = join(stateDir, "secret");
+const screenshotDir = join(stateDir, "screenshots");
 const MAX_UNTRACKED = 300;
 const MAX_UNTRACKED_BYTES = 1_000_000;
+const MAX_SCREENSHOTS = 20;
+const IMAGE_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+};
 
 function secret(): string {
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
@@ -104,8 +120,26 @@ async function localFile(session: StoredSession, side: string, path: string): Pr
   return readFile(full, "utf8");
 }
 
-function publicInfo({ repoRoot: _root, result: _result, ...info }: StoredSession): SessionInfo {
-  return info;
+function publicInfo({ repoRoot: _root, result: _result, screenshots, ...info }: StoredSession): SessionInfo {
+  return screenshots?.length
+    ? { ...info, screenshots: screenshots.map(({ caption }) => ({ caption })) }
+    : info;
+}
+
+/** Writes the screenshots the launcher sent (base64) next to the sessions, so the JSON stays small. */
+function saveScreenshots(id: string, input: unknown): StoredScreenshot[] | undefined {
+  if (!Array.isArray(input) || input.length === 0) return undefined;
+  if (input.length > MAX_SCREENSHOTS) throw new Error(`At most ${MAX_SCREENSHOTS} screenshots per review`);
+  const dir = join(screenshotDir, id);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  return input.map((shot: { name?: unknown; caption?: unknown; data?: unknown }, index) => {
+    const ext = /\.([a-z]+)$/i.exec(String(shot.name ?? ""))?.[1]?.toLowerCase() ?? "";
+    const type = IMAGE_TYPES[ext];
+    if (!type || typeof shot.data !== "string") throw new Error(`Screenshot ${shot.name} is not a png, jpg, webp or gif`);
+    const file = join(dir, `${index}.${ext}`);
+    writeFileSync(file, Buffer.from(shot.data, "base64"), { mode: 0o600 });
+    return { caption: typeof shot.caption === "string" ? shot.caption : "", file, type };
+  });
 }
 
 /** Review sessions an agent opens and waits on, plus the local git diffs they review. */
@@ -148,12 +182,16 @@ export function agentSessions(port: number, extras: Record<string, unknown> = {}
   async function createSession(input: Record<string, unknown>): Promise<StoredSession> {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
+    const description =
+      typeof input.description === "string" && input.description.trim() ? input.description : undefined;
+    const attachments = { description, screenshots: saveScreenshots(id, input.screenshots) };
     if (input.kind === "pr" && typeof input.repo === "string" && typeof input.prId === "number") {
       return {
         id,
         kind: "pr",
         createdAt,
         status: "open",
+        ...attachments,
         repo: input.repo,
         prId: input.prId,
         title: typeof input.title === "string" ? input.title : `${input.repo} #${input.prId}`,
@@ -169,6 +207,7 @@ export function agentSessions(port: number, extras: Record<string, unknown> = {}
       kind: "local",
       createdAt,
       status: "open",
+      ...attachments,
       repoRoot,
       repoName: basename(repoRoot),
       branch,
@@ -219,6 +258,15 @@ export function agentSessions(port: number, extras: Record<string, unknown> = {}
               url.searchParams.get("path") ?? "",
             );
             return send(res, 200, contents, "text/plain; charset=utf-8");
+          }
+
+          if (action === "screenshots" && req.method === "GET") {
+            const shot = session.screenshots?.[Number(parts[3])];
+            if (!shot) return send(res, 404, { error: "No such screenshot" });
+            res.statusCode = 200;
+            res.setHeader("Content-Type", shot.type);
+            res.setHeader("Cache-Control", "private, max-age=86400");
+            return res.end(await readFile(shot.file));
           }
 
           if (action === "submit" && req.method === "POST") {

@@ -32,10 +32,16 @@ Then `/visual-review` opens the review in your browser and the agent waits for i
   the waiting agent instead of posting it, **Bitbucket** posts it on the PR as usual.
   Without a waiting agent, Agent mode copies the review as Markdown.
 
+The agent attaches a draft PR description (`--description <file>`, Markdown) and
+screenshots of what it changed (`--screenshot <file>::<caption>`, repeatable). They
+show above the diff. You can edit the description there, and your version goes back
+with the review.
+
 The launcher works without Claude too:
 
 ```sh
 bun scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>] [--no-wait]
+                             [--description <file>] [--screenshot <file>::<caption> ...]
 bun scripts/visual-review.ts --list | --stop
 ```
 

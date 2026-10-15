@@ -16,6 +16,7 @@ import {
 import type { Account } from "../api/types";
 import { DotIcon } from "../components/DotIcon";
 import { ModeToggle, type ReviewMode } from "../components/ModeToggle";
+import { AgentAttachments, useDraftDescription } from "../components/AgentAttachments";
 import { Overview } from "../components/Overview";
 import { ReviewerStack } from "../components/Reviewers";
 import { ReviewWorkspace } from "../components/ReviewWorkspace";
@@ -62,6 +63,7 @@ export function PullRequestView({ repo, id, me, agentSession }: Props) {
   const myState =
     pr.data?.participants.find((participant) => participant.user.uuid === me.uuid)?.state ?? null;
   const sessionOpen = session.data?.status === "open";
+  const description = useDraftDescription(session.data);
 
   async function releaseSession(submission: Parameters<typeof submitSession>[1]) {
     if (!agentSession || !sessionOpen) return;
@@ -91,7 +93,7 @@ export function PullRequestView({ repo, id, me, agentSession }: Props) {
   }
 
   async function submitToAgent({ verdict, summary }: { verdict: AgentVerdict; summary: string }) {
-    const review = buildAgentReview(files, drafts, verdict, summary);
+    const review = { ...buildAgentReview(files, drafts, verdict, summary), description: description.edited };
     if (agentSession && sessionOpen) {
       await submitSession(agentSession, { destination: "agent", review });
       await queryClient.invalidateQueries({ queryKey: ["session", agentSession] });
@@ -197,7 +199,7 @@ export function PullRequestView({ repo, id, me, agentSession }: Props) {
               buttonLabel={sessionOpen ? "Send to agent" : "Copy review"}
               submitLabel={sessionOpen ? "Send to agent" : "Copy as Markdown"}
               note={sessionOpen ? "Nothing is posted to Bitbucket." : "No agent is waiting; the review is copied as Markdown."}
-              allowEmpty={(verdict) => verdict === "approve"}
+              allowEmpty={(verdict) => verdict === "approve" || description.edited !== undefined}
               onSubmit={submitToAgent}
               onDismiss={
                 sessionOpen ? () => submitToAgent({ verdict: "dismissed", summary: "" }) : undefined
@@ -226,12 +228,19 @@ export function PullRequestView({ repo, id, me, agentSession }: Props) {
       }
       banner={notice && <p className="notice">{notice}</p>}
       overview={
-        <Overview
-          pr={pr.data}
-          threads={threads.filter((thread) => !thread.root.inline)}
-          orphanThreads={orphanThreads}
-          commentsError={comments.error}
-        />
+        <>
+          {session.data && (session.data.description || session.data.screenshots?.length) && (
+            <section className="overview">
+              <AgentAttachments session={session.data} description={description} />
+            </section>
+          )}
+          <Overview
+            pr={pr.data}
+            threads={threads.filter((thread) => !thread.root.inline)}
+            orphanThreads={orphanThreads}
+            commentsError={comments.error}
+          />
+        </>
       }
       files={files}
       diffPending={diff.isPending}

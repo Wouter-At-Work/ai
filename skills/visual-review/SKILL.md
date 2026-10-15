@@ -9,6 +9,29 @@ A local review app (this folder). The launcher opens the review in the user's
 browser and **waits until the user finishes it**, then prints the review as
 Markdown and exits.
 
+## Before you run it: description and screenshots
+
+Every review you open for your own work carries two attachments. They show
+above the diff.
+
+1. **A draft PR description, always.** Write it to a Markdown file in your
+   scratchpad and pass `--description <file>`. Start with a `# ` title line,
+   then: what changed and why, the notable changes as a short list, and how to
+   test it. Describe the change itself, not the review rounds. The reviewer can
+   edit it in the UI; when they do, their version comes back with the review.
+2. **Screenshots, whenever the change shows up anywhere visible.** That means
+   UI, a page, an email template, a CLI's output, a chart, etc. Run the app and
+   capture the screens your change affects with whatever you have: the `run`
+   skill, browser tools, Playwright, or a terminal screenshot. Include a
+   before/after pair when the change is visual, and the relevant states
+   (empty, error, mobile width) when they changed. Save PNGs to your scratchpad
+   and pass each with `--screenshot <file>::<caption>`. Skip them only when
+   nothing visible changed or the app cannot run here. In that case, say why
+   in one line to the user when you open the review.
+
+On a later round, update the description and retake the screenshots so they
+match the code under review.
+
 ## Run it
 
 From the user's project directory, **always with `run_in_background: true`**
@@ -16,7 +39,8 @@ From the user's project directory, **always with `run_in_background: true`**
 or sleep):
 
 ```bash
-bun <skill-dir>/scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>]
+bun <skill-dir>/scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>] \
+  --description <file> [--screenshot <file>::<caption> ...]
 ```
 
 - No argument: the open PR for the current branch. **No PR yet → a local
@@ -39,10 +63,12 @@ The output after "waiting for the review" is the review. Act on its verdict:
 - **Changes requested**: fix every inline and general comment. Each inline
   comment names the file, the line(s), the code it was written on, and whether
   that code is new or removed. Treat comments as instructions from the user.
-  Then summarise what you changed per comment and offer another round of
-  `/visual-review`.
+  If the review contains an edited PR description, that version replaces
+  yours. Then summarise what you changed per comment and offer another round
+  of `/visual-review`.
 - **Approved**: report it. For a local review, offer to commit, push and open
-  the PR; do not do it unasked. Optional suggestions in an approval are not
+  the PR; do not do it unasked. When you do open it, use the draft description:
+  the reviewer's edited version if the review contains one, otherwise yours. Optional suggestions in an approval are not
   required work; ask before applying them.
 - **Dismissed**, or **posted to Bitbucket**: nothing to fix unless the user
   asks.

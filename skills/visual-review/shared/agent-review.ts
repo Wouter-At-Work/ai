@@ -12,6 +12,10 @@ export interface SessionInfo {
   base?: string;
   repo?: string;
   prId?: number;
+  /** The agent's draft PR description, as Markdown. */
+  description?: string;
+  /** Screenshots the agent attached; each is served at `screenshots/<index>` of the session. */
+  screenshots?: { caption: string }[];
 }
 
 export interface AgentComment {
@@ -28,6 +32,8 @@ export interface AgentReview {
   summary: string;
   notes: string[];
   comments: AgentComment[];
+  /** The draft PR description, only when the reviewer edited it. */
+  description?: string;
 }
 
 export type Submission =
@@ -62,10 +68,12 @@ function lineLabel(comment: AgentComment) {
     : `${range} of the old version (removed code)`;
 }
 
-function fence(lines: string[], path: string, firstLine: number) {
+function fence(lines: string[], path: string, firstLine: number, numbered = true) {
   const ext = /\.([a-z0-9]+)$/i.exec(path)?.[1] ?? "";
   const width = String(firstLine + lines.length - 1).length;
-  const body = lines.map((text, i) => `${String(firstLine + i).padStart(width)}  ${text}`).join("\n");
+  const body = numbered
+    ? lines.map((text, i) => `${String(firstLine + i).padStart(width)}  ${text}`).join("\n")
+    : lines.join("\n");
   const ticks = body.includes("```") ? "````" : "```";
   return `${ticks}${ext}\n${body}\n${ticks}`;
 }
@@ -90,6 +98,16 @@ export function formatAgentReview(session: SessionInfo, review: AgentReview): st
       }
       out.push(comment.body.trim());
     });
+  }
+  if (review.description !== undefined) {
+    out.push(
+      "",
+      "## PR description (edited by the reviewer)",
+      "",
+      "Use this version of the description from now on:",
+      "",
+      fence(review.description.trim().split("\n"), "description.md", 1, false),
+    );
   }
   return out.join("\n") + "\n";
 }
