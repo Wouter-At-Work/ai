@@ -59,6 +59,7 @@ function scope(session: SessionInfo) {
 }
 
 function lineLabel(comment: AgentComment) {
+  if (comment.line === 0) return "(whole file)";
   const range =
     comment.startLine !== undefined && comment.startLine !== comment.line
       ? `lines ${comment.startLine}–${comment.line}`

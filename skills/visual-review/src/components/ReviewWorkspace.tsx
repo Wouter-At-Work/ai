@@ -168,6 +168,10 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
                 setActiveIndex(index);
                 openComposer(file, range);
               }}
+              onCommentFile={() => {
+                setActiveIndex(index);
+                setComposer({ path: file.name, side: "additions", line: 0 });
+              }}
             />
           ))}
         </main>

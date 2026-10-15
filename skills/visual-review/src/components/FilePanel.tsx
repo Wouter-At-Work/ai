@@ -32,6 +32,7 @@ function AnchorComposer({ anchor }: { anchor: Anchor }) {
   const review = useReview();
   return (
     <div className="thread">
+      {anchor.line === 0 && <p className="muted small">Commenting on the whole file</p>}
       {anchor.startLine !== undefined && anchor.startLine !== anchor.line && (
         <p className="muted small">
           Commenting on lines {anchor.startLine}–{anchor.line}
@@ -64,6 +65,7 @@ interface FilePanelProps {
   options: FileDiffOptions<LineNotes, undefined>;
   onToggleViewed(): void;
   onComment(range: SelectedLineRange): void;
+  onCommentFile(): void;
 }
 
 export function FilePanel({
@@ -75,10 +77,14 @@ export function FilePanel({
   options,
   onToggleViewed,
   onComment,
+  onCommentFile,
 }: FilePanelProps) {
   const handleComment = useStableCallback(onComment);
   const stats = lineStats(file);
   const threadCount = annotations.reduce((total, slot) => total + slot.metadata.threads.length, 0);
+  // Line 0 holds whole-file comments (and outdated ones); they sit above the diff, even when collapsed.
+  const fileNotes = annotations.filter((slot) => slot.lineNumber === 0);
+  const lineNotes = annotations.filter((slot) => slot.lineNumber !== 0);
 
   return (
     <section id={`file-${index}`} className={`file-panel${active ? " active" : ""}`}>
@@ -103,11 +109,19 @@ export function FilePanel({
         <span className="stat-del">−{stats.removed}</span>
         {threadCount > 0 && <CommentCount count={threadCount} />}
         <span className="spacer" />
+        <button type="button" className="button small" onClick={onCommentFile} title="Comment on the whole file">
+          Comment on file
+        </button>
         <label className="viewed-toggle">
           <input type="checkbox" checked={viewed} onChange={onToggleViewed} />
           Viewed
         </label>
       </header>
+      {fileNotes.map((slot) => (
+        <div key={slot.side} className="file-notes">
+          <LineNotesView notes={slot.metadata} />
+        </div>
+      ))}
       {!viewed && (
         <FileDiff<LineNotes>
           fileDiff={file}
@@ -118,7 +132,7 @@ export function FilePanel({
             enableLineSelection: true,
             onGutterUtilityClick: handleComment,
           }}
-          lineAnnotations={annotations}
+          lineAnnotations={lineNotes}
           renderAnnotation={(annotation) => <LineNotesView notes={annotation.metadata} />}
         />
       )}

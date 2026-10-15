@@ -4,6 +4,7 @@ import type { Comment, InlinePosition } from "../api/types";
 export interface Anchor {
   path: string;
   side: AnnotationSide;
+  /** 0 means the whole file rather than a line. */
   line: number;
   startLine?: number;
 }
@@ -79,9 +80,11 @@ export function threadPosition(file: FileDiffMetadata, inline: InlinePosition) {
 
 /**
  * Converts an anchor into Bitbucket's inline position for a new comment.
+ * A line of 0 is a comment on the whole file, which Bitbucket takes as a path without lines.
  * @example toInline({ path: "a.ts", side: "deletions", line: 4 }) // → { path: "a.ts", from: 4 }
  */
 export function toInline(anchor: Anchor): InlinePosition {
+  if (anchor.line === 0) return { path: anchor.path };
   const ranged = anchor.startLine !== undefined && anchor.startLine !== anchor.line;
   return anchor.side === "additions"
     ? { path: anchor.path, to: anchor.line, ...(ranged ? { start_to: anchor.startLine } : {}) }

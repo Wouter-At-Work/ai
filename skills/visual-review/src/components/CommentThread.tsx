@@ -103,7 +103,10 @@ export function CommentThread({ thread, drafts }: { thread: Thread; drafts: Draf
           {resolved && <span className="tag ok">Resolved</span>}
           {thread.root.inline && (
             <span className="muted small">
-              {thread.root.inline.path}:{thread.root.inline.to ?? thread.root.inline.from}
+              {thread.root.inline.path}
+              {(thread.root.inline.to ?? thread.root.inline.from) != null
+                ? `:${thread.root.inline.to ?? thread.root.inline.from}`
+                : " (whole file)"}
             </span>
           )}
           <span className="spacer" />

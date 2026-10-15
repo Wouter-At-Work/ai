@@ -6,7 +6,8 @@ A local, comfortable code-review UI for Bitbucket Cloud pull requests, built on
 - Open PRs across your repos, grouped by *waiting on your review*, *reviewed by you*, *yours*.
 - Split / unified diffs with syntax highlighting; expand hidden context (loads full files on demand).
 - Existing inline threads on their lines; outdated comments sit at the top of their file.
-- Comment on a line or a dragged range via the gutter **+**.
+- Comment on a line or a dragged range via the gutter **+**, or on a whole file via
+  **Comment on file** in its header.
 - **Add to review** keeps drafts locally (they survive reloads); **Finish review** posts them
   all, plus an optional summary, and approves or requests changes.
 - Reply, resolve / reopen, unapprove.

@@ -62,7 +62,8 @@ The output after "waiting for the review" is the review. Act on its verdict:
 
 - **Changes requested**: fix every inline and general comment. Each inline
   comment names the file, the line(s), the code it was written on, and whether
-  that code is new or removed. Treat comments as instructions from the user.
+  that code is new or removed. A comment marked *(whole file)* is about the
+  file as a whole. Treat comments as instructions from the user.
   If the review contains an edited PR description, that version replaces
   yours. Then summarise what you changed per comment and offer another round
   of `/visual-review`.

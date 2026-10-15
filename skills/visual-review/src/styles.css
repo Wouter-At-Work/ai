@@ -946,6 +946,11 @@ kbd {
 
 /* Comments */
 
+.file-notes {
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+}
+
 .line-notes {
   display: flex;
   flex-direction: column;
