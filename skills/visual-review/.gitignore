@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.env.local
+
+# Exposure (205TF) is licensed; copy it from the portfolio locally
+src/fonts/exposure-*.woff2
