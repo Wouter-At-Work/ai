@@ -79,8 +79,9 @@ and `write:pullrequest:bitbucket`.
 
 - The styling follows [new.wouter.codes](https://new.wouter.codes) (tokens, chrome chips,
   dot-grid icons from `creative-portfolio`). Its text face, Exposure (205TF), is licensed and
-  kept out of git: copy `exposure-*.woff2` from `creative-portfolio/src/app/(frontend)/fonts/`
-  into `src/fonts/`. Without them the UI falls back to Georgia.
+  kept out of git. An installed Exposure VAR (the variable font, regular and italic) is used
+  first; otherwise copy `exposure-*.woff2` from `creative-portfolio/src/app/(frontend)/fonts/`
+  into `src/fonts/`. Without either the UI falls back to Georgia.
 - `@pierre/diffs` does not survive React StrictMode's double mount in dev (diffs
   render empty), so the app is not wrapped in `StrictMode`.
 - `BITBUCKET_API_URL` overrides the API origin, e.g. to point at a mock server.

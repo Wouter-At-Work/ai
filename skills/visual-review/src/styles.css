@@ -2,28 +2,32 @@
 
 @font-face {
   font-family: "Exposure";
-  src: url("./fonts/exposure-400.woff2") format("woff2");
+  src: local("Exposure VAR Exposure Regular"), local("ExposureVAR-Exposure"),
+    url("./fonts/exposure-400.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
 }
 
 @font-face {
   font-family: "Exposure";
-  src: url("./fonts/exposure-600.woff2") format("woff2");
+  src: local("Exposure VAR Exposure Regular"), local("ExposureVAR-Exposure"),
+    url("./fonts/exposure-600.woff2") format("woff2");
   font-weight: 600;
   font-display: swap;
 }
 
 @font-face {
   font-family: "Exposure";
-  src: url("./fonts/exposure-700.woff2") format("woff2");
+  src: local("Exposure VAR Exposure Regular"), local("ExposureVAR-Exposure"),
+    url("./fonts/exposure-700.woff2") format("woff2");
   font-weight: 700;
   font-display: swap;
 }
 
 @font-face {
   font-family: "Exposure";
-  src: url("./fonts/exposure-400-italic.woff2") format("woff2");
+  src: local("Exposure VAR Italic Exposure Regular"), local("ExposureVARItalic-Exposure"),
+    url("./fonts/exposure-400-italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
