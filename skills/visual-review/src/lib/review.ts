@@ -14,6 +14,8 @@ export interface Draft {
   body: string;
   anchor?: Anchor;
   parentId?: number;
+  /** Drafted by the agent that opened the review. */
+  fromAgent?: boolean;
 }
 
 export interface Thread {

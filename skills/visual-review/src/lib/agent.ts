@@ -42,7 +42,12 @@ export function buildAgentReview(
   const notes: string[] = [];
   for (const draft of drafts) {
     if (!draft.anchor) {
-      notes.push(draft.parentId ? `(Reply to Bitbucket comment ${draft.parentId}) ${draft.body}` : draft.body);
+      const prefix = draft.parentId
+        ? `(Reply to Bitbucket comment ${draft.parentId}) `
+        : draft.fromAgent
+          ? "*(your draft, kept by the reviewer)* "
+          : "";
+      notes.push(prefix + draft.body);
       continue;
     }
     const anchor = draft.anchor;
@@ -54,6 +59,7 @@ export function buildAgentReview(
       startLine: anchor.startLine,
       body: draft.body,
       code: file ? codeAt(file, anchor) : undefined,
+      fromAgent: draft.fromAgent,
     });
   }
   const order = new Map(files.map((file, index) => [file.name, index]));

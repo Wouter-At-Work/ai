@@ -29,6 +29,30 @@ above the diff.
    nothing visible changed or the app cannot run here. In that case, say why
    in one line to the user when you open the review.
 
+### Draft comments (optional)
+
+You can also leave comments in the review as drafts for the reviewer: spots
+you are unsure about, trade-offs you want them to decide, or, when the user
+asks you to pre-review a PR, the comments you would post. They show as
+drafts marked *From agent*; the reviewer keeps, edits or discards each one,
+and kept ones are sent along (to you, or posted to Bitbucket under the
+reviewer's name). Write a JSON array to your scratchpad and pass
+`--comments <file>`:
+
+```json
+[
+  { "path": "src/api.ts", "line": 42, "body": "Retry here, or fail fast?" },
+  { "path": "src/api.ts", "startLine": 10, "line": 14, "side": "deletions", "body": "This was the only caller." },
+  { "path": "README.md", "body": "On the whole file." },
+  { "body": "A general comment, not on a file." }
+]
+```
+
+`path` is relative to the repository root, as in `git diff`. `line` is in the new file (`side: "additions"`, the default) or the old file
+(`"deletions"`), and must be a line the diff shows: changed or in a hunk's
+context. Leave `line` out for the whole file and `path` out for a general
+comment. Use them sparingly; do not restate the description.
+
 On a later round, update the description and retake the screenshots so they
 match the code under review.
 
@@ -40,7 +64,7 @@ or sleep):
 
 ```bash
 bun <skill-dir>/scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>] \
-  --description <file> [--screenshot <file>::<caption> ...]
+  --description <file> [--screenshot <file>::<caption> ...] [--comments <file>]
 ```
 
 - No argument: the open PR for the current branch. **No PR yet → a local
@@ -63,7 +87,9 @@ The output after "waiting for the review" is the review. Act on its verdict:
 - **Changes requested**: fix every inline and general comment. Each inline
   comment names the file, the line(s), the code it was written on, and whether
   that code is new or removed. A comment marked *(whole file)* is about the
-  file as a whole. Treat comments as instructions from the user.
+  file as a whole. A comment marked *(your draft, kept by the reviewer)* is one
+  you drafted that the reviewer chose to keep; treat it as agreed. Treat
+  comments as instructions from the user.
   If the review contains an edited PR description, that version replaces
   yours. Then summarise what you changed per comment and offer another round
   of `/visual-review`.

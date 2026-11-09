@@ -9,6 +9,7 @@ import type { Plugin } from "vite";
 import {
   formatAgentReview,
   formatBitbucketOutcome,
+  type AgentDraft,
   type SessionInfo,
   type SessionResult,
   type Submission,
@@ -110,6 +111,14 @@ function safeRelative(path: string): string {
   return clean;
 }
 
+/** Every path the local diff touches, old and new names of renames included. */
+async function changedPaths(repoRoot: string, base: string): Promise<Set<string>> {
+  const mergeBase = (await git(repoRoot, ["merge-base", "HEAD", base])).trim();
+  const tracked = await git(repoRoot, ["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", "-z", mergeBase]);
+  const untracked = await git(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  return new Set(`${tracked}\0${untracked}`.split("\0").filter(Boolean));
+}
+
 async function localFile(session: StoredSession, side: string, path: string): Promise<string> {
   const repoRoot = session.repoRoot ?? "";
   const relative = safeRelative(path);
@@ -140,6 +149,33 @@ function saveScreenshots(id: string, input: unknown): StoredScreenshot[] | undef
     writeFileSync(file, Buffer.from(shot.data, "base64"), { mode: 0o600 });
     return { caption: typeof shot.caption === "string" ? shot.caption : "", file, type };
   });
+}
+
+const MAX_DRAFTS = 200;
+const isLine = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 0;
+
+/** Checks the comments the launcher sent and keeps only the fields the UI uses. */
+function parseDrafts(input: unknown): AgentDraft[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) throw new Error("Comments must be a JSON array");
+  if (input.length > MAX_DRAFTS) throw new Error(`At most ${MAX_DRAFTS} comments per review`);
+  const drafts = input.map((raw: Record<string, unknown>, index): AgentDraft => {
+    const where = `Comment ${index + 1}`;
+    if (typeof raw?.body !== "string" || !raw.body.trim()) throw new Error(`${where} has no body`);
+    if (raw.path === undefined) return { body: raw.body };
+    if (typeof raw.path !== "string" || !raw.path) throw new Error(`${where} has an invalid path`);
+    const side = raw.side ?? "additions";
+    if (side !== "additions" && side !== "deletions") {
+      throw new Error(`${where}: side must be "additions" or "deletions"`);
+    }
+    const line = raw.line ?? 0;
+    if (!isLine(line)) throw new Error(`${where}: line must be a whole number (0 for the whole file)`);
+    if (raw.startLine !== undefined && (!isLine(raw.startLine) || raw.startLine < 1 || raw.startLine > line)) {
+      throw new Error(`${where}: startLine must be between 1 and line`);
+    }
+    return { body: raw.body, path: raw.path, side, line, startLine: raw.startLine as number | undefined };
+  });
+  return drafts.length ? drafts : undefined;
 }
 
 /** Review sessions an agent opens and waits on, plus the local git diffs they review. */
@@ -184,7 +220,8 @@ export function agentSessions(port: number, extras: Record<string, unknown> = {}
     const createdAt = new Date().toISOString();
     const description =
       typeof input.description === "string" && input.description.trim() ? input.description : undefined;
-    const attachments = { description, screenshots: saveScreenshots(id, input.screenshots) };
+    const drafts = parseDrafts(input.drafts);
+    const attachments = { description, drafts, screenshots: saveScreenshots(id, input.screenshots) };
     if (input.kind === "pr" && typeof input.repo === "string" && typeof input.prId === "number") {
       return {
         id,
@@ -202,6 +239,13 @@ export function agentSessions(port: number, extras: Record<string, unknown> = {}
     const branch = (await git(repoRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
     const base = typeof input.base === "string" && input.base ? input.base : await defaultBase(repoRoot);
     await git(repoRoot, ["rev-parse", "--verify", base]);
+    if (drafts?.some((draft) => draft.path)) {
+      const paths = await changedPaths(repoRoot, base);
+      const unknown = drafts.find((draft) => draft.path && !paths.has(draft.path));
+      if (unknown) {
+        throw new Error(`Comment on ${unknown.path}: not a changed file; paths are relative to the repository root`);
+      }
+    }
     return {
       id,
       kind: "local",

@@ -16,6 +16,17 @@ export interface SessionInfo {
   description?: string;
   /** Screenshots the agent attached; each is served at `screenshots/<index>` of the session. */
   screenshots?: { caption: string }[];
+  /** Comments the agent drafted; the UI seeds them into the reviewer's drafts once. */
+  drafts?: AgentDraft[];
+}
+
+/** A comment the agent drafts for the reviewer. No path: a general comment; line 0: the whole file. */
+export interface AgentDraft {
+  body: string;
+  path?: string;
+  side?: ReviewSide;
+  line?: number;
+  startLine?: number;
 }
 
 export interface AgentComment {
@@ -25,6 +36,8 @@ export interface AgentComment {
   startLine?: number;
   body: string;
   code?: string[];
+  /** The agent drafted it and the reviewer kept it. */
+  fromAgent?: boolean;
 }
 
 export interface AgentReview {
@@ -52,6 +65,8 @@ const VERDICT_LINE: Record<AgentVerdict, string> = {
   approve: "**Approved.** No changes requested; any comments below are optional suggestions.",
   dismissed: "**Dismissed.** The reviewer closed the review without feedback. Make no changes.",
 };
+
+const KEPT = "*(your draft, kept by the reviewer)*";
 
 function scope(session: SessionInfo) {
   if (session.kind === "pr") return `Pull request ${session.repo} #${session.prId} (${session.title}).`;
@@ -93,7 +108,7 @@ export function formatAgentReview(session: SessionInfo, review: AgentReview): st
   if (review.comments.length) {
     out.push("", `## Inline comments (${review.comments.length})`);
     review.comments.forEach((comment, index) => {
-      out.push("", `### ${index + 1}. \`${comment.path}\` ${lineLabel(comment)}`, "");
+      out.push("", `### ${index + 1}. \`${comment.path}\` ${lineLabel(comment)}${comment.fromAgent ? ` ${KEPT}` : ""}`, "");
       if (comment.code?.length) {
         out.push(fence(comment.code, comment.path, comment.startLine ?? comment.line), "");
       }

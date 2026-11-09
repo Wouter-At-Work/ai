@@ -13,7 +13,7 @@ import { ErrorBox } from "../components/Status";
 import { SubmitReview } from "../components/SubmitReview";
 import { buildAgentReview } from "../lib/agent";
 import { AGENT_VERDICTS } from "../lib/agent-verdicts";
-import { useDrafts } from "../lib/drafts";
+import { useAgentDrafts, useDrafts } from "../lib/drafts";
 
 interface LocalOverviewProps {
   fileCount: number;
@@ -53,6 +53,7 @@ export function LocalReviewView({ sessionId, me }: { sessionId: string; me: Acco
 
   const storageKey = `local:${session.data?.repoName}:${session.data?.branch}`;
   const { drafts, clearDrafts } = useDrafts(storageKey);
+  useAgentDrafts(session.data, storageKey);
   const description = useDraftDescription(session.data);
   const files = diff.data ?? [];
   const open = session.data?.status === "open";

@@ -64,6 +64,7 @@ export function DraftCard({ draft }: { draft: Draft }) {
         <div className="comment-meta">
           <strong>{review.me.display_name}</strong>
           <span className="tag draft-tag">Draft</span>
+          {draft.fromAgent && <span className="tag">From agent</span>}
           {draft.anchor?.startLine !== undefined && (
             <span className="muted small">
               lines {draft.anchor.startLine}–{draft.anchor.line}

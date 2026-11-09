@@ -11,6 +11,7 @@
  *   visual-review.ts --base <ref>   the base for a local review (default: origin's default branch)
  *   visual-review.ts --description <file>          the agent's draft PR description (Markdown)
  *   visual-review.ts --screenshot <file>[::caption]  attach a screenshot; repeat for more
+ *   visual-review.ts --comments <file.json>        draft comments for the reviewer (JSON array)
  *   visual-review.ts --no-wait      open the review without waiting for it
  *   visual-review.ts --list         the pull request list
  *   visual-review.ts --stop         stop the background server
@@ -145,6 +146,7 @@ function parseArgs(argv: string[]) {
     base: "",
     target: "",
     description: "",
+    comments: "",
     screenshots: [] as string[],
   };
   for (let i = 0; i < argv.length; i++) {
@@ -155,6 +157,7 @@ function parseArgs(argv: string[]) {
     else if (arg === "--stop") flags.stop = true;
     else if (arg === "--base") flags.base = argv[++i] ?? "";
     else if (arg === "--description") flags.description = argv[++i] ?? "";
+    else if (arg === "--comments") flags.comments = argv[++i] ?? "";
     else if (arg === "--screenshot") flags.screenshots.push(argv[++i] ?? "");
     else if (arg.startsWith("--")) fail(`unknown option ${arg}`);
     else flags.target = arg;
@@ -173,7 +176,7 @@ function requireCredentials() {
   );
 }
 
-/** Reads the description and screenshot files named on the command line into the session body. */
+/** Reads the description, comment and screenshot files named on the command line into the session body. */
 function attachments(flags: ReturnType<typeof parseArgs>) {
   const read = (path: string) => {
     if (!path || !existsSync(path)) fail(`no such file: ${path || "(missing path)"}`);
@@ -181,11 +184,20 @@ function attachments(flags: ReturnType<typeof parseArgs>) {
   };
   return {
     description: flags.description ? read(flags.description).toString("utf8") : undefined,
+    drafts: flags.comments ? parseJson(flags.comments, read(flags.comments).toString("utf8")) : undefined,
     screenshots: flags.screenshots.map((spec) => {
       const [path = "", ...caption] = spec.split("::");
       return { name: basename(path), caption: caption.join("::").trim(), data: read(path).toString("base64") };
     }),
   };
+}
+
+function parseJson(path: string, text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    fail(`${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function createSession(input: Record<string, unknown>) {
@@ -268,8 +280,8 @@ async function main() {
         : `#/${String(session.repo)}/${String(session.prId)}${flags.wait ? `?agent=${id}` : ""}`;
   } else if (session) {
     path = `#/${String(session.repo)}/${String(session.prId)}`;
-    if (flags.description || flags.screenshots.length) {
-      console.log("visual-review: --no-wait on a PR opens it without a session; the description and screenshots are not shown");
+    if (flags.description || flags.comments || flags.screenshots.length) {
+      console.log("visual-review: --no-wait on a PR opens it without a session; the description, comments and screenshots are not shown");
     }
   }
 

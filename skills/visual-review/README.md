@@ -36,13 +36,16 @@ Then `/visual-review` opens the review in your browser and the agent waits for i
 The agent attaches a draft PR description (`--description <file>`, Markdown) and
 screenshots of what it changed (`--screenshot <file>::<caption>`, repeatable). They
 show above the diff. You can edit the description there, and your version goes back
-with the review.
+with the review. It can also leave draft comments for you (`--comments <file>`, a JSON
+array of `{ path?, line?, startLine?, side?, body }`); they appear as drafts marked
+*From agent* that you keep, edit or discard.
 
 The launcher works without Claude too:
 
 ```sh
 bun scripts/visual-review.ts [PR number | PR URL] [--local] [--base <ref>] [--no-wait]
                              [--description <file>] [--screenshot <file>::<caption> ...]
+                             [--comments <file>]
 bun scripts/visual-review.ts --list | --stop
 ```
 

@@ -25,7 +25,7 @@ import { SubmitReview } from "../components/SubmitReview";
 import { AGENT_VERDICTS } from "../lib/agent-verdicts";
 import { buildAgentReview } from "../lib/agent";
 import { ICONS } from "../lib/dot-icons";
-import { useDrafts } from "../lib/drafts";
+import { useAgentDrafts, useDrafts } from "../lib/drafts";
 import { buildThreads, fileMatches, toInline } from "../lib/review";
 
 type BitbucketVerdict = "comment" | "approve" | "request-changes";
@@ -54,6 +54,7 @@ export function PullRequestView({ repo, id, me, agentSession }: Props) {
 
   const storageKey = `${repo}:${id}`;
   const { drafts, discardDraft, clearDrafts } = useDrafts(storageKey);
+  useAgentDrafts(session.data, storageKey);
   const addComment = useAddComment(repo, id);
   const resolveComment = useResolveComment(repo, id);
   const setReview = useSetReview(repo, id);
